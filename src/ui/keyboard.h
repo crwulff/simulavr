@@ -41,6 +41,7 @@
 class Keyboard : public SimulationMember, public ExternalType {
     protected:
         unsigned char myPortValue;
+        std::map<std::string, Pin*> allPins;
         Pin clk;
         Pin data;
 
@@ -66,6 +67,7 @@ class Keyboard : public SimulationMember, public ExternalType {
         Keyboard(UserInterface *, const char *name, const char *baseWindow);
         void SetClockFreq(SystemClockOffset f);
         virtual ~Keyboard();
+        Pin *GetPin(const char *name);
 };
 
 #endif

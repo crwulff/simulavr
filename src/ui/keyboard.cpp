@@ -187,6 +187,9 @@ bufferWriteIndex(0), bufferReadIndex(0)
     myPortValue=0;
     bitCnt=0;
 
+    allPins["clk"]=&clk;
+    allPins["data"]=&data;
+
     //ncurses setup
     ostringstream os;
     os << "create Kbd " << name  << " .x " <<  endl;
@@ -264,5 +267,9 @@ void Keyboard::SetNewValueFromUi(const string& s) {
         default:
             cerr << "Unknown message for kbd-handler received from gui :-(" << endl;
     }
+}
+
+Pin *Keyboard::GetPin(const char *name) {
+   return allPins[name];
 }
 
