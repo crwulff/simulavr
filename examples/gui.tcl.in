@@ -460,6 +460,31 @@ class Lcd {
 }
 
 
+class MotorController {
+    protected {
+        variable parent
+        variable objname
+        variable win
+    }
+
+    public {
+        constructor { _parent _objname _win _minpos _maxpos _position } {
+            set parent $_parent
+            set win $_win
+            set objname $_objname 
+
+            scale $win.$objname -from $_minpos -to $_maxpos
+	    pack $win.$objname -side left
+
+	    $win.$objname set $_position
+        }
+
+        method ChangeValue { newValue } {
+            set inState $newValue
+            $win.$objname set $newValue
+        }
+    }
+}
 
 
 class Net {
