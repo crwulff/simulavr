@@ -75,11 +75,13 @@ AvrDevice_atmega1284Abase::~AvrDevice_atmega1284Abase() {
     delete stack;
     delete eeprom;
     delete irqSystem;
+    delete spmRegister;
 }
 
 AvrDevice_atmega1284Abase::AvrDevice_atmega1284Abase(unsigned ram_bytes,
                                                      unsigned flash_bytes,
-                                                     unsigned ee_bytes ):
+                                                     unsigned ee_bytes,
+                                                     unsigned nrww_start):
     AvrDevice(256-32,       // I/O space size (above ALU registers)
               ram_bytes,    // RAM size
               0,            // External RAM size
@@ -95,11 +97,31 @@ AvrDevice_atmega1284Abase::AvrDevice_atmega1284Abase(unsigned ram_bytes,
 { 
     flagELPMInstructions = true;
     fuses->SetFuseConfiguration(19, 0xff9962);
+    if(flash_bytes > 32U * 1024U) {
+        fuses->SetBootloaderConfig(nrww_start, (flash_bytes >> 1) - nrww_start, 9, 8);
+        spmRegister = new FlashProgramming(this, 128, nrww_start, FlashProgramming::SPM_MEGA_MODE);
+    } else {
+        fuses->SetBootloaderConfig(nrww_start, (flash_bytes >> 1) - nrww_start, 9, 8);
+        spmRegister = new FlashProgramming(this, 64, nrww_start, FlashProgramming::SPM_MEGA_MODE);
+    }
 
     irqSystem = new HWIrqSystem(this, 4, 31);
 
-    eeprom = new HWEeprom(this, irqSystem, ee_bytes, 25, HWEeprom::DEVMODE_EXTENDED); 
-    stack = new HWStackSram(this, 16);
+    eeprom = new HWEeprom(this, irqSystem, ee_bytes, 25, HWEeprom::DEVMODE_EXTENDED);
+    // initialize stack: size=11,12,13,15 bit and init to RAMEND
+    int stack_size;
+    if(ram_bytes > 2U * 1024U) {
+        if(ram_bytes > 4U * 1024U)
+            stack_size = 15;
+        else
+            stack_size = 13;
+    } else {
+        if(ram_bytes > 1U * 1024U)
+            stack_size = 11;
+        else
+            stack_size = 12;
+    }
+    stack = new HWStackSram(this, stack_size, true);
     clkpr_reg = new CLKPRRegister(this, &coreTraceGroup);
     osccal_reg = new OSCCALRegister(this, &coreTraceGroup, OSCCALRegister::OSCCAL_V5);
 
@@ -294,7 +316,7 @@ AvrDevice_atmega1284Abase::AvrDevice_atmega1284Abase(unsigned ram_bytes,
     // 0x5c reserved
     rw[0x5b]= & rampz->ext_reg;
     // 0x58 - 0x5a reserved
-    rw[0x57]= new NotSimulatedRegister("Self-programming register SPMCSR not simulated");
+    rw[0x57]= & spmRegister->spmcr_reg;
     // 0x56 reserved
     rw[0x55]= new NotSimulatedRegister("MCU register MCUCR not simulated");
     rw[0x54]= new NotSimulatedRegister("MCU register MCUSR not simulated");

@@ -42,6 +42,7 @@ AVR_REGISTER(attiny85, AvrDevice_attiny85)
 
 AvrDevice_attinyX5::~AvrDevice_attinyX5() {
     // destroy subsystems in reverse order, you've created it in constructor
+    delete usi;
     delete acomp;
     delete ad;
     delete aref;
@@ -66,6 +67,7 @@ AvrDevice_attinyX5::~AvrDevice_attinyX5() {
     delete stack;
     delete eeprom;
     delete irqSystem;
+    delete spmRegister;
 }
 
 AvrDevice_attinyX5::AvrDevice_attinyX5(unsigned ram_bytes,
@@ -79,9 +81,21 @@ AvrDevice_attinyX5::AvrDevice_attinyX5(unsigned ram_bytes,
     flagJMPInstructions = false;
     flagMULInstructions = false;
     fuses->SetFuseConfiguration(17, 0xffdf62);
+    if(flash_bytes > 2U * 1024U)
+        spmRegister = new FlashProgramming(this, 32, 0x0000, FlashProgramming::SPM_TINY_MODE);
+    else
+        spmRegister = new FlashProgramming(this, 16, 0x0000, FlashProgramming::SPM_TINY_MODE);
     irqSystem = new HWIrqSystem(this, 2, 15); // 2 bytes per vector, 15 vectors
-    eeprom = new HWEeprom(this, irqSystem, ee_bytes, 6, HWEeprom::DEVMODE_EXTENDED); 
-    stack = new HWStackSram(this, 12);
+    eeprom = new HWEeprom(this, irqSystem, ee_bytes, 6, HWEeprom::DEVMODE_EXTENDED);
+    //initialize stack: size=8,9,10 bit and init to RAMEND 
+    int stack_size = 8;
+    if(ram_bytes > 128U) {
+        if(ram_bytes > 256U)
+            stack_size = 10;
+        else
+            stack_size = 9;
+    }
+    stack = new HWStackSram(this, stack_size, true);
     clkpr_reg = new CLKPRRegister(this, &coreTraceGroup);
     osccal_reg = new OSCCALRegister(this, &coreTraceGroup, OSCCALRegister::OSCCAL_V5);
     
@@ -141,6 +155,10 @@ AvrDevice_attinyX5::AvrDevice_attinyX5(unsigned ram_bytes,
     // Analog comparator
     acomp = new HWAcomp(this, irqSystem, PinAtPort(portb, 0), PinAtPort(portb, 1), 7, ad, NULL);
 
+    // USI
+    usi = new HWUSI_BR(this, irqSystem, PinAtPort(portb, 0), PinAtPort(portb, 1), PinAtPort(portb, 2), 13, 14);
+    timer0->SetTimerEventListener(usi);
+
     // IO register set
     rw[0x5f]= statusRegister;
     rw[0x5e]= & ((HWStackSram *)stack)->sph_reg;
@@ -150,7 +168,7 @@ AvrDevice_attinyX5::AvrDevice_attinyX5(unsigned ram_bytes,
     rw[0x5a]= gifr_reg;
     rw[0x59]= & timer01irq->timsk_reg;
     rw[0x58]= & timer01irq->tifr_reg;
-    //rw[0x57] reserved
+    rw[0x57]= & spmRegister->spmcr_reg;
     //rw[0x56] reserved
     rw[0x55]= mcucr_reg;
     //rw[0x54] reserved
@@ -191,11 +209,11 @@ AvrDevice_attinyX5::AvrDevice_attinyX5(unsigned ram_bytes,
     rw[0x33]= gpior2_reg;
     rw[0x32]= gpior1_reg;
     rw[0x31]= gpior0_reg;
-    rw[0x30]= new NotSimulatedRegister("USI register USIBR not simulated");
+    rw[0x30]= &usi->usibr_reg;
 
-    rw[0x2f]= new NotSimulatedRegister("USI register USIDR not simulated");
-    rw[0x2e]= new NotSimulatedRegister("USI register USISR not simulated");
-    rw[0x2d]= new NotSimulatedRegister("USI register USICR not simulated");
+    rw[0x2f]= &usi->usidr_reg;
+    rw[0x2e]= &usi->usisr_reg;
+    rw[0x2d]= &usi->usicr_reg;
     //rw[0x2c] reserved
     //rw[0x2b] reserved
     //rw[0x2a] reserved
