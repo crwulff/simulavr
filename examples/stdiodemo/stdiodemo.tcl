@@ -1,3 +1,4 @@
+#! /usr/bin/wish
 #
 #  Stdio Demo user extension set for simulavr.tcl
 #
